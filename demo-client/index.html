@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kasagi State Sync Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #16213e;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #0f3460;
+        }
+
+        .header h1 {
+            font-size: 1.5rem;
+            color: #4ECDC4;
+        }
+
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+
+        .status-indicator.connected {
+            background: #2ecc71;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .game-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .canvas-container {
+            background: #0f0f23;
+            border-radius: 10px;
+            border: 2px solid #0f3460;
+            overflow: hidden;
+        }
+
+        #gameCanvas {
+            display: block;
+            cursor: crosshair;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            background: #16213e;
+            padding: 15px;
+            border-radius: 8px;
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .control-group h3 {
+            color: #4ECDC4;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        input, button, select {
+            padding: 8px 12px;
+            border: none;
+            border-radius: 5px;
+            font-size: 0.9rem;
+        }
+
+        input {
+            background: #0f0f23;
+            color: #eee;
+            border: 1px solid #0f3460;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        button {
+            background: #4ECDC4;
+            color: #1a1a2e;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s;
+        }
+
+        button:hover {
+            background: #45B7D1;
+        }
+
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .sidebar {
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .panel {
+            background: #16213e;
+            border-radius: 10px;
+            padding: 15px;
+            border: 1px solid #0f3460;
+        }
+
+        .panel h3 {
+            color: #4ECDC4;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            border-bottom: 1px solid #0f3460;
+            padding-bottom: 8px;
+        }
+
+        .player-list {
+            list-style: none;
+        }
+
+        .player-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #0f3460;
+        }
+
+        .player-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: 2px solid #fff;
+        }
+
+        .player-name {
+            flex: 1;
+        }
+
+        .player-name.me {
+            color: #4ECDC4;
+            font-weight: bold;
+        }
+
+        .log-container {
+            flex: 1;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            font-family: monospace;
+            font-size: 0.8rem;
+            padding: 4px 0;
+            border-bottom: 1px solid #0f3460;
+            color: #888;
+        }
+
+        .log-entry.info { color: #4ECDC4; }
+        .log-entry.error { color: #e74c3c; }
+        .log-entry.message { color: #f39c12; }
+
+        .instructions {
+            font-size: 0.85rem;
+            color: #888;
+            line-height: 1.5;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .stat {
+            background: #0f0f23;
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            color: #4ECDC4;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎮 Kasagi State Sync Demo</h1>
+        <div class="status">
+            <span id="statusText">Disconnected</span>
+            <div class="status-indicator" id="statusIndicator"></div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="game-area">
+            <div class="canvas-container">
+                <canvas id="gameCanvas" width="800" height="600"></canvas>
+            </div>
+
+            <div class="controls">
+                <div class="control-group">
+                    <h3>Connection</h3>
+                    <input type="text" id="serverUrl" value="ws://localhost:8080/sync" placeholder="Server URL">
+                    <input type="text" id="roomId" value="demo-room" placeholder="Room ID">
+                    <input type="text" id="playerName" placeholder="Your Name">
+                    <button id="connectBtn" onclick="connect()">Connect</button>
+                    <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+                </div>
+
+                <div class="control-group">
+                    <h3>Instructions</h3>
+                    <p class="instructions">
+                        1. Start the Java server<br>
+                        2. Enter your name and click Connect<br>
+                        3. Use <b>WASD</b> keys to move<br>
+                        4. Click to teleport<br>
+                        5. Open another tab for multiplayer!
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="panel">
+                <h3>📊 Statistics</h3>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-value" id="playerCount">0</div>
+                        <div class="stat-label">Players</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="messageCount">0</div>
+                        <div class="stat-label">Messages</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="stateVersion">0</div>
+                        <div class="stat-label">Version</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-value" id="latency">-</div>
+                        <div class="stat-label">Latency (ms)</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>👥 Players in Room</h3>
+                <ul class="player-list" id="playerList">
+                    <li><em>No players connected</em></li>
+                </ul>
+            </div>
+
+            <div class="panel" style="flex: 1;">
+                <h3>📜 Event Log</h3>
+                <div class="log-container" id="logContainer"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === State ===
+        let ws = null;
+        let myPlayerId = null;
+        let players = {};
+        let messageCount = 0;
+        let stateVersion = 0;
+
+        // === Canvas Setup ===
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // === WebSocket Connection ===
+        function connect() {
+            const url = document.getElementById('serverUrl').value;
+            const roomId = document.getElementById('roomId').value;
+            const playerName = document.getElementById('playerName').value || 'Player-' + Math.random().toString(36).substr(2, 5);
+
+            log('Connecting to ' + url + '...', 'info');
+
+            try {
+                ws = new WebSocket(url);
+
+                ws.onopen = () => {
+                    log('Connected! Joining room: ' + roomId, 'info');
+                    updateConnectionStatus(true);
+
+                    // Send join room message
+                    send({
+                        type: 'JOIN_ROOM',
+                        roomId: roomId,
+                        payload: {
+                            playerName: playerName,
+                            color: generateRandomColor()
+                        }
+                    });
+                };
+
+                ws.onmessage = (event) => {
+                    messageCount++;
+                    document.getElementById('messageCount').textContent = messageCount;
+
+                    const message = JSON.parse(event.data);
+                    handleMessage(message);
+                };
+
+                ws.onclose = () => {
+                    log('Disconnected from server', 'error');
+                    updateConnectionStatus(false);
+                    myPlayerId = null;
+                    players = {};
+                    updatePlayerList();
+                    render();
+                };
+
+                ws.onerror = (error) => {
+                    log('WebSocket error: ' + error, 'error');
+                };
+
+            } catch (e) {
+                log('Failed to connect: ' + e.message, 'error');
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                send({ type: 'LEAVE_ROOM' });
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function send(message) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify(message));
+                log('Sent: ' + message.type, 'message');
+            }
+        }
+
+        // === Message Handlers ===
+        function handleMessage(message) {
+            log('Received: ' + message.type, 'message');
+
+            if (message.version) {
+                stateVersion = message.version;
+                document.getElementById('stateVersion').textContent = stateVersion;
+            }
+
+            switch (message.type) {
+                case 'FULL_STATE':
+                    handleFullState(message);
+                    break;
+                case 'DELTA_UPDATE':
+                    handleDeltaUpdate(message);
+                    break;
+                case 'PLAYER_JOINED':
+                    handlePlayerJoined(message);
+                    break;
+                case 'PLAYER_LEFT':
+                    handlePlayerLeft(message);
+                    break;
+                case 'ERROR':
+                    log('Error: ' + message.payload.message, 'error');
+                    break;
+            }
+        }
+
+        function handleFullState(message) {
+            myPlayerId = message.playerId;
+            players = message.payload.players || {};
+            log('Received full state with ' + Object.keys(players).length + ' players', 'info');
+            updatePlayerList();
+            render();
+        }
+
+        function handleDeltaUpdate(message) {
+            const changes = message.payload.players || {};
+
+            for (const [playerId, delta] of Object.entries(changes)) {
+                if (players[playerId]) {
+                    // Apply delta changes
+                    Object.assign(players[playerId], delta);
+                }
+            }
+
+            render();
+        }
+
+        function handlePlayerJoined(message) {
+            const player = message.payload;
+            players[player.playerId] = player;
+            log(player.playerName + ' joined the room', 'info');
+            updatePlayerList();
+            render();
+        }
+
+        function handlePlayerLeft(message) {
+            const playerId = message.payload.playerId;
+            const playerName = message.payload.playerName;
+            delete players[playerId];
+            log(playerName + ' left the room', 'info');
+            updatePlayerList();
+            render();
+        }
+
+        // === Canvas Interaction ===
+        const MOVE_SPEED = 10;
+        const keysPressed = {};
+
+        // Track key states
+        document.addEventListener('keydown', (e) => {
+            if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+                keysPressed[e.key.toLowerCase()] = true;
+                e.preventDefault();
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (['w', 'a', 's', 'd', 'W', 'A', 'S', 'D'].includes(e.key)) {
+                keysPressed[e.key.toLowerCase()] = false;
+            }
+        });
+
+        // Game loop for smooth movement
+        function gameLoop() {
+            if (ws && myPlayerId && players[myPlayerId]) {
+                let moved = false;
+                let { x, y } = players[myPlayerId];
+
+                if (keysPressed['w']) { y -= MOVE_SPEED; moved = true; }
+                if (keysPressed['s']) { y += MOVE_SPEED; moved = true; }
+                if (keysPressed['a']) { x -= MOVE_SPEED; moved = true; }
+                if (keysPressed['d']) { x += MOVE_SPEED; moved = true; }
+
+                // Keep within canvas bounds
+                x = Math.max(20, Math.min(canvas.width - 20, x));
+                y = Math.max(20, Math.min(canvas.height - 20, y));
+
+                if (moved) {
+                    players[myPlayerId].x = x;
+                    players[myPlayerId].y = y;
+                    render();
+
+                    // Send update to server
+                    send({
+                        type: 'STATE_UPDATE',
+                        roomId: document.getElementById('roomId').value,
+                        payload: { x: x, y: y }
+                    });
+                }
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        gameLoop();
+
+        // Click to teleport (still works)
+        canvas.addEventListener('click', (e) => {
+            if (!ws || !myPlayerId) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            if (players[myPlayerId]) {
+                players[myPlayerId].x = x;
+                players[myPlayerId].y = y;
+                render();
+            }
+
+            send({
+                type: 'STATE_UPDATE',
+                roomId: document.getElementById('roomId').value,
+                payload: { x: x, y: y }
+            });
+        });
+
+        // === Rendering ===
+        function render() {
+            // Clear canvas
+            ctx.fillStyle = '#0f0f23';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw grid
+            ctx.strokeStyle = '#1a1a2e';
+            ctx.lineWidth = 1;
+            for (let x = 0; x < canvas.width; x += 50) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                ctx.stroke();
+            }
+            for (let y = 0; y < canvas.height; y += 50) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+                ctx.stroke();
+            }
+
+            // Draw players
+            for (const [playerId, player] of Object.entries(players)) {
+                const isMe = playerId === myPlayerId;
+
+                // Draw player circle
+                ctx.beginPath();
+                ctx.arc(player.x, player.y, isMe ? 20 : 15, 0, Math.PI * 2);
+                ctx.fillStyle = player.color || '#fff';
+                ctx.fill();
+
+                // Draw border for self
+                if (isMe) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                // Draw name
+                ctx.fillStyle = '#fff';
+                ctx.font = isMe ? 'bold 14px sans-serif' : '12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(player.playerName || 'Unknown', player.x, player.y - 25);
+            }
+
+            // Update player count
+            document.getElementById('playerCount').textContent = Object.keys(players).length;
+        }
+
+        // === UI Helpers ===
+        function updateConnectionStatus(connected) {
+            document.getElementById('statusIndicator').classList.toggle('connected', connected);
+            document.getElementById('statusText').textContent = connected ? 'Connected' : 'Disconnected';
+            document.getElementById('connectBtn').disabled = connected;
+            document.getElementById('disconnectBtn').disabled = !connected;
+        }
+
+        function updatePlayerList() {
+            const list = document.getElementById('playerList');
+            const playerArray = Object.values(players);
+
+            if (playerArray.length === 0) {
+                list.innerHTML = '<li><em>No players connected</em></li>';
+                return;
+            }
+
+            list.innerHTML = playerArray.map(player => {
+                const isMe = player.playerId === myPlayerId;
+                return `
+                    <li>
+                        <div class="player-color" style="background: ${player.color}"></div>
+                        <span class="player-name ${isMe ? 'me' : ''}">${player.playerName}${isMe ? ' (you)' : ''}</span>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function log(message, type = 'info') {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            container.insertBefore(entry, container.firstChild);
+
+            // Keep only last 100 entries
+            while (container.children.length > 100) {
+                container.removeChild(container.lastChild);
+            }
+        }
+
+        function generateRandomColor() {
+            const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+            return colors[Math.floor(Math.random() * colors.length)];
+        }
+
+        // Initial render
+        render();
+        log('Ready. Enter server details and click Connect.', 'info');
+    </script>
+</body>
+</html>
